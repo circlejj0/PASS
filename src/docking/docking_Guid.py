@@ -1,92 +1,58 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import math
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
-from pyproj import Transformer
-from sensor_msgs.msg import NavSatFix, Imu
-from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Point  
-from std_msgs.msg import Float64, Float64MultiArray, String
+from std_msgs.msg import String
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
 
 class DockingGuid(Node):
     def __init__(self):
         super().__init__('wamv_perception')
-        qos = QoSProfile(depth=10)
 
-        self.gps_sub = self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, qos)
-        self.imu_sub = self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, qos)
-        self.obs_marker_sub = self.create_subscription(Marker, '/obs_center_point', self.obs_callback, qos)
-        self.circle_marker_sub = self.create_subscription(Marker, '/circle_load', self.circle_callback, qos)
+        # Parameter
+        self.declare_parameter('camera_topic', '/wamv/sensors/cameras/front_left_camera_sensor/optical/image_raw')
+        self.declare_parameter('show', False)  
 
-        self.error_psi_pub = self.create_publisher(Float64, '/error_psi', 10)
-        self.distance_pub = self.create_publisher(Float64, '/distance', 10)
-        self.yaw_pub = self.create_publisher(Float64, '/yaw', 10)
-        self.utm_pub = self.create_publisher(Float64MultiArray, 'UTM_Latlot', 10)
+        gp = self.get_parameter
+        self.camera_topic = gp('camera_topic').value
+        self.show = bool(gp('show').value)
 
-        self.obs_pub = self.create_publisher(Marker, '/filtered_obs', 10)
-        self.circle_pub = self.create_publisher(Marker, '/transformed_circle', 10)
-
-        self.goal_x = 325000.0
-        self.goal_y = 4098000.0
-
+        # 도착 신호 받음
+        self.arrived = False
         self.create_subscription(String, '/nav/status', self.status_cb, 10)
-        self.arrived_scan_p1 = False
 
-        self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32756", always_xy=True)
+        # Pub
+        self.dir_pub = self.create_publisher(String, 'object_direction', 10)
 
-    def status_cb(self, msg):
-        if msg.data == "ARRIVED_SCAN_P1" and not self.arrived_scan_p1:
-            self.arrived_scan_p1 = True
-            self.get_logger().info("[Guidance] 스캔 포인트 도착 신호 수신 ✅  -> Guidance 모드 로직 시작")
+        # Sub
+        self.bridge = CvBridge()
+        self.sub = self.create_subscription(Image, self.camera_topic, self.image_cb, 10)
 
+    # Navigation 코드에서 도착 신호 받았을 때 실행됨
+    def status_cb(self, msg: String):
+        if msg.data == "ARRIVED_SCAN_P1" and not self.arrived:
+            self.arrived = True
+            self.get_logger().info("[Guidance] ARRIVED_SCAN_P1 -> start publishing directions")
 
-    def gps_callback(self, msg):
-        lon, lat = msg.longitude, msg.latitude
-        x, y = self.transformer.transform(lon, lat)
-        utm_msg = Float64MultiArray()
-        utm_msg.data = [x, y]
-        self.utm_pub.publish(utm_msg)
+    # 카메라 Callback
+    def image_cb(self, msg: Image):
+        if not self.arrived:
+            return
 
-        dx = self.goal_x - x
-        dy = self.goal_y - y
-        distance = math.hypot(dx, dy)
-        self.distance_pub.publish(Float64(data=distance))
+        # ROS Image를 OpenCV BGR 이미지로 변환
+        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
-    def imu_callback(self, msg):
-        q = msg.orientation
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        yaw = math.atan2(siny_cosp, cosy_cosp)
-        self.yaw_pub.publish(Float64(data=yaw))
+        # ========== 임시 ==========
+        h, w = frame.shape[:2]
+        cx = w // 2
 
-    def obs_callback(self, msg):
-        self.obs_pub.publish(msg)
-
-    def circle_callback(self, msg):
-        new_marker = Marker()
-        new_marker.header = msg.header
-        new_marker.ns = msg.ns
-        new_marker.id = msg.id
-        new_marker.type = msg.type
-        new_marker.action = msg.action
-        new_marker.pose = msg.pose
-        new_marker.scale = msg.scale
-        new_marker.color = msg.color
-        new_marker.frame_locked = msg.frame_locked
-        new_marker.lifetime = msg.lifetime
-
-        new_marker.points = []
-
-        for p in msg.points:
-            x, y, z = self.transformer.transform(p.y, p.x, p.z)
-            pt = Marker().points[0]
-            pt.x, pt.y, pt.z = x, y, z
-            new_marker.points.append(pt)
-
-        self.circle_pub.publish(new_marker)
+        if cx < w/3: direction = "left"
+        elif cx > 2*w/3: direction = "right"
+        else: direction = "center"
+        # ========== 임시 ===========
 
 def main(args=None):
     rclpy.init(args=args)
@@ -94,6 +60,7 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
