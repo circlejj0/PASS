@@ -16,20 +16,21 @@ class DockingCont(Node):
         super().__init__('wamv_control')
         qos = QoSProfile(depth=10)
 
+        # Sub
         self.create_subscription(Float64, '/error_psi', self.e_psi_callback, qos)
         self.create_subscription(Float64, '/distance', self.distance_callback, qos)
         self.create_subscription(Float64, '/yaw', self.yaw_callback, qos)
         self.create_subscription(Float64MultiArray, 'UTM_Latlot', self.utm_callback, qos)
-        self.create_subscription(Marker, '/filtered_obs', self.obs_callback, qos)
-        self.create_subscription(Marker, '/transformed_circle', self.circle_callback, qos)
         self.create_subscription(Float64, '/next_obj', self.next_obj_callback, qos)
 
+        # Pub
         self.left_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
         self.right_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
 
+        # Timer
         self.timer = self.create_timer(0.1, self.process)
 
-        # 내부 상태
+        # 변수 설정
         self.error_psi = 0.0
         self.distance = 0.0
         self.yaw = 0.0
@@ -37,7 +38,9 @@ class DockingCont(Node):
         self.wamv_y = 0.0
         self.center_of_obs = []
         self.path_points = []
+        self.next_obj = 0
 
+        # 제어 파라미터
         self.kp = 10.0
         self.kd = 5.0
         self.prev_error = 0.0
@@ -45,88 +48,51 @@ class DockingCont(Node):
         self.right_thrust = 550
         self.left_thrust = 550
 
+        # 상태 플래그
         self.avoid_mode = False
         self.current_idx = 0
         self.docking_hold = False
         self.docking_start_time = None
-        self.next_obj = 0
 
     def e_psi_callback(self, msg): self.error_psi = msg.data
     def distance_callback(self, msg): self.distance = msg.data
     def yaw_callback(self, msg): self.yaw = msg.data
     def utm_callback(self, msg): self.wamv_x, self.wamv_y = msg.data[0], msg.data[1]
-    def obs_callback(self, msg): self.center_of_obs = msg.points
-    def circle_callback(self, msg): self.path_points = list(msg.points)
     def next_obj_callback(self, msg): self.next_obj = int(round(msg.data))
 
+    # 주기 실행
     def process(self):
+        # 도킹 시작 지점에서 멈춤
         if self.next_obj == 1 and self.distance < self.close_distance and not self.docking_hold:
             self.docking_hold = True
             self.docking_start_time = self.get_clock().now()
             self.stop_wamv()
             return
 
+        # 도킹 시작 지점 위치 유지
         if self.docking_hold:
             elapsed = (self.get_clock().now() - self.docking_start_time).nanoseconds * 1e-9
             if elapsed >= 3.0:
-                self.get_logger().info("도킹 완료")
+                self.get_logger().info("이미지 센싱 위치 도달")
                 return
             else:
                 self.stop_wamv()
                 return
 
-        if self.avoid_mode:
-            self.follow_circle_path()
-            return
-
-        if self.avoid_check():
-            return
 
         self.go_straight()
 
-    def avoid_check(self):
-        if self.avoid_mode or not self.center_of_obs:
-            return False
-
-        front = [p for p in self.center_of_obs if p.x > 0.0 and abs(p.y) < 2.0 and math.hypot(p.x, p.y) < 13.0]
-        if not front:
-            return False
-
-        close_obs = min(front, key=lambda p: math.hypot(p.x, p.y))
-        if math.hypot(close_obs.x, close_obs.y) < 10.0 and self.path_points:
-            self.avoid_mode = True
-            self.current_idx = 0
-            self.get_logger().info("회피 경로 진입")
-            return True
-        return False
-
-    def follow_circle_path(self):
-        if self.current_idx >= len(self.path_points):
-            self.get_logger().info("회피 종료")
-            self.avoid_mode = False
-            return
-
-        target = self.path_points[self.current_idx]
-        dx = target.x - self.wamv_x
-        dy = target.y - self.wamv_y
-        psi_d = math.atan2(dy, dx)
-        yaw_err = cal_angle(psi_d - self.yaw)
-
-        turn_val = self.kp * yaw_err + self.kd * (yaw_err - self.prev_error)
-        self.prev_error = yaw_err
-        self.publish_thrust(750 - turn_val, 750 + turn_val)
-
-        if math.hypot(dx, dy) < 1.0:
-            self.current_idx += 1
-
+    # 직진 제어
     def go_straight(self):
         turn_val = self.kp * self.error_psi + self.kd * (self.error_psi - self.prev_error)
         self.prev_error = self.error_psi
         self.publish_thrust(self.left_thrust - turn_val, self.right_thrust + turn_val)
 
+    # 정지
     def stop_wamv(self):
         self.publish_thrust(0.0, 0.0)
 
+    # 추력 pub
     def publish_thrust(self, left, right):
         l_msg, r_msg = Float64(), Float64()
         l_msg.data, r_msg.data = float(left), float(right)
