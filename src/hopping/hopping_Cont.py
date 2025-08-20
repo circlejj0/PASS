@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from std_msgs.msg import Float64, Float64MultiArray
-from visualization_msgs.msg import Marker
-
-def cal_angle(angle):
-    return math.atan2(math.sin(angle), math.cos(angle))
 
 class HoppingCont(Node):
     def __init__(self):
@@ -36,21 +31,17 @@ class HoppingCont(Node):
         self.yaw = 0.0
         self.wamv_x = 0.0
         self.wamv_y = 0.0
-        self.center_of_obs = []
-        self.path_points = []
         self.next_obj = 0
 
         # 제어 파라미터
         self.kp = 10.0
         self.kd = 5.0
         self.prev_error = 0.0
-        self.close_distance = 3
+        self.close_distance = 30.
         self.right_thrust = 550
         self.left_thrust = 550
 
         # 상태 플래그
-        self.avoid_mode = False
-        self.current_idx = 0
         self.Hopping_hold = False
         self.Hopping_start_time = None
 
