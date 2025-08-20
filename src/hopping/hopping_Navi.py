@@ -68,8 +68,12 @@ class HoppingNavi(Node):
 
         # Hopping 좌표
         waypoint_lonlat = [
-            (129.106851, 35.134878),
-            (129.107020, 35.132837),
+            (129.106815, 35.134922),
+            (129.104100, 35.134699),
+            (129.104206, 35.133883),
+            (129.104570, 35.133616),
+            (129.106949, 35.133797),
+            (129.107077, 35.132835)
         ]
         utm_waypoints = [self.transformer.transform(lon, lat) for lon, lat in waypoint_lonlat]
 
