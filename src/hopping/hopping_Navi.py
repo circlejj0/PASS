@@ -12,7 +12,7 @@ from rclpy.qos import (
 )
 from pyproj import Transformer
 from sensor_msgs.msg import NavSatFix, Imu
-from std_msgs.msg import Float64, Float64MultiArray, String
+from std_msgs.msg import Float64, Float64MultiArray, String, ColorRGBA
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker
@@ -58,9 +58,9 @@ class HoppingNavi(Node):
         # Hopping 좌표
         waypoint_lonlat = [
             (129.106815, 35.134922),
-            (129.104100, 35.134699),
-            (129.104206, 35.133883),
-            (129.104570, 35.133616),
+            (129.104361, 35.134601),
+            (129.104398, 35.133922),
+            (129.104671, 35.133580),
             (129.106949, 35.133797),
             (129.107077, 35.132835)
         ]
@@ -90,21 +90,29 @@ class HoppingNavi(Node):
         marker.id = 0
         marker.type = Marker.SPHERE_LIST
         marker.action = Marker.ADD
-        marker.scale.x = 1.0
-        marker.scale.y = 1.0
-        marker.scale.z = 1.0
+        marker.scale.x = 1.5
+        marker.scale.y = 1.5
+        marker.scale.z = 1.5
         marker.color.a = 1.0
-        marker.color.r = 1.0
-        marker.color.g = 0.0
-        marker.color.b = 0.0
+        marker.points = []
+        marker.colors = []
 
-        for (x, y) in self.waypoints:
+        for i, (x, y) in enumerate(self.waypoints):
             p = Point()
             p.x, p.y, p.z = x, y, 0.0
             marker.points.append(p)
 
+            c = ColorRGBA()
+            c.a = 1.0
+            if i == self.next_obj:
+                # 현재 목표 웨이포인트 → 초록색
+                c.r, c.g, c.b = 0.0, 1.0, 0.0
+            else:
+                # 나머지 → 빨간색
+                c.r, c.g, c.b = 1.0, 0.0, 0.0
+            marker.colors.append(c)
+
         self.marker_pub.publish(marker)
-        self.get_logger().info(f"Published {len(self.waypoints)} waypoints")
 
     # Callback 함수들
     def latlot_listener_callback(self, msg):
@@ -165,6 +173,13 @@ class HoppingNavi(Node):
     def moving_obs_point(self):
         goal_x, goal_y = self.waypoints[self.next_obj]
         self.distance = math.sqrt((goal_x - self.base_x)**2 + (goal_y - self.base_y)**2)
+
+        # 반경 5m 이내 접근 → 다음 waypoint로 이동
+        if self.distance < 10.0 and self.next_obj < len(self.waypoints) - 1:
+            self.get_logger().info(f"Waypoint {self.next_obj} 도착 → 다음으로 이동")
+            self.next_obj += 1
+            self.publish_waypoints_marker()
+
 
 
 def main(args=None):
