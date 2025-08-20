@@ -3,7 +3,6 @@
 
 import rclpy
 import math
-import time
 from rclpy.node import Node
 from rclpy.qos import (
     QoSProfile,
@@ -12,7 +11,6 @@ from rclpy.qos import (
     QoSDurabilityPolicy
 )
 from pyproj import Transformer
-
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, Float64MultiArray, String
 from nav_msgs.msg import Path
@@ -33,10 +31,8 @@ class HoppingNavi(Node):
         )
 
         # Sub
-        self.create_subscription(NavSatFix, '/mavros/global_position/raw/fix',
-                                 self.latlot_listener_callback, sensor_qos)
-        self.create_subscription(Imu, '/mavros/imu/data',
-                                 self.psi_listener_callback, sensor_qos)
+        self.create_subscription(NavSatFix, '/mavros/global_position/raw/fix', self.latlot_listener_callback, sensor_qos)
+        self.create_subscription(Imu, '/mavros/imu/data', self.psi_listener_callback, sensor_qos)
 
         # Pub
         self.epsi_pub = self.create_publisher(Float64, '/error_psi', 10)
@@ -44,7 +40,6 @@ class HoppingNavi(Node):
         self.utm_pub = self.create_publisher(Float64MultiArray, '/UTM_Latlot', 10)
         self.yaw_pub = self.create_publisher(Float64, '/yaw', 10)
         self.next_obj_pub = self.create_publisher(Float64, '/next_obj', 10)
-        self.status_pub = self.create_publisher(String, '/nav/status', 10)
 
         # RViz 시각화용 Pub
         self.path_pub = self.create_publisher(Path, '/mk/path', 10)      
@@ -55,12 +50,6 @@ class HoppingNavi(Node):
         self.latitude = None
         self.longitude = None
         self.rad = 0.0
-        self.error_psi = 0.0
-        self.distance = 0.0
-        self.arrived_sent = False
-        self.waiting = False
-        self.wait_start_time = None
-        self.wait_duration = 5.0
         self.next_obj = 0
 
         # 좌표 변환
