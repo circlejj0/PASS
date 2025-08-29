@@ -3,7 +3,7 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Float64 # Float64 메시지 타입 import
+from std_msgs.msg import String, Float64
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -26,21 +26,21 @@ class DockingGuid(Node):
         self.target_shape_color = gp('target_shape_color').value.lower()
 
         self.arrived = False
+
+        # Sub
         self.create_subscription(String, '/nav/status', self.status_cb, 10)
+        self.create_subscription(Image, self.camera_topic, self.image_cb, 10)
         
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
-        
-        # ==================== [ 수정된 부분: 퍼블리셔 변경 ] ====================
-        # String 타입의 'object_direction' 대신 Float64 타입의 'visual_error'를 발행합니다.
+
+        # Pub
         self.error_pub = self.create_publisher(Float64, 'visual_error', qos_profile)
-        # ===================================================================
         
         self.bridge = CvBridge()
-        self.sub = self.create_subscription(Image, self.camera_topic, self.image_cb, 10)
 
         self.get_logger().info(f"DockingGuid Node started. Looking for a '{self.target_shape_color} {self.target_shape}'.")
 
@@ -50,7 +50,6 @@ class DockingGuid(Node):
             self.get_logger().info("[Guidance] ARRIVED_SCAN_P1 -> Start publishing error")
 
     def detect_shape(self, contour):
-        # (이 함수는 변경 없음)
         shape = "unidentified"
         peri = cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
@@ -69,7 +68,7 @@ class DockingGuid(Node):
         h, w, _ = frame.shape
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-        # (색상 필터링 부분 변경 없음)
+        # 색깔 필터링
         if self.target_shape_color == 'red':
             lower1, upper1 = np.array([0, 100, 100]), np.array([10, 255, 255])
             lower2, upper2 = np.array([170, 100, 100]), np.array([179, 255, 255])
@@ -77,14 +76,13 @@ class DockingGuid(Node):
             mask = cv2.add(mask1, mask2)
         else: mask = np.zeros(frame.shape[:2], dtype='uint8')
 
-        # (모폴로지 연산 변경 없음)
+        # 모폴로지 연산
         kernel = np.ones((5, 5), np.uint8)
         mask_cleaned = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         mask_cleaned = cv2.morphologyEx(mask_cleaned, cv2.MORPH_CLOSE, kernel)
 
         contours, _ = cv2.findContours(mask_cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # ==================== [ 수정된 부분: 오차 계산 및 발행 ] ====================
         visual_error_msg = Float64(data=0.0)
 
         if contours:
@@ -95,7 +93,7 @@ class DockingGuid(Node):
                     M = cv2.moments(largest_contour)
                     if M["m00"] != 0:
                         cx = int(M["m10"] / M["m00"])
-                        # 화면 중앙과의 픽셀 오차를 계산합니다. (오른쪽: +, 왼쪽: -)
+                        # 화면 중앙과 목표 도형의 픽셀 오차 계산
                         error = cx - (w / 2)
                         visual_error_msg.data = float(error)
 
@@ -105,16 +103,13 @@ class DockingGuid(Node):
                             text = f"Error: {error:.1f} pixels"
                             cv2.putText(frame, text, (cx - 70, int(M["m01"] / M["m00"]) - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
-        # 계산된 오차 값을 발행합니다.
         self.error_pub.publish(visual_error_msg)
-        # ===================================================================
 
         if self.show:
             cv2.imshow("Result Frame", frame)
             cv2.imshow("Cleaned Mask", mask_cleaned)
             cv2.waitKey(1)
             
-# (main 함수는 변경 없음)
 def main(args=None):
     rclpy.init(args=args)
     node = DockingGuid()
