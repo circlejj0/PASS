@@ -38,22 +38,25 @@ class DockingNavi(Node):
         # 좌표 변환
         self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32756")
 
-        # 목표 좌표 (첫 번째 경유지만 사용)
+        # 목표 좌표 (도착 시작 지점 좌표임. 여기서 도크쪽으로 회전)
         waypoint_lonlat = [(150.67427803618017, -33.72272135580442)]
         self.waypoints = [self.transformer.transform(lat, lon) for lon, lat in waypoint_lonlat]
 
         # 제어 파라미터
         self.kp, self.lookahead_distance, self.arrive_thr = 1.0, 5.0, 2.0
 
+    # GPS Data Sub
     def latlot_listener_callback(self, msg):
         self.gps_data = msg
         self.latitude, self.longitude = msg.latitude, msg.longitude
 
+    # IMU Data Sub
     def psi_listener_callback(self, msg):
         q = msg.orientation
         self.rad = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y**2 + q.z**2))
         self.degree = self.rad * 180 / math.pi
 
+    # 주기 실행
     def process(self):
         if self.gps_data is None or self.arrived_sent:
             return
@@ -64,7 +67,6 @@ class DockingNavi(Node):
         if self.distance < self.arrive_thr:
             self.status_pub.publish(String(data="ARRIVED_P1"))
             self.arrived_sent = True
-            self.get_logger().info("Arrived at Waypoint 1. Handing over control.")
             return
 
         self.epsi_pub.publish(Float64(data=self.error_psi))
@@ -72,6 +74,7 @@ class DockingNavi(Node):
         self.utm_pub.publish(Float64MultiArray(data=[self.base_x, self.base_y]))
         self.yaw_pub.publish(Float64(data=self.rad))
 
+    # 도형 방향 계산
     def calculate_guidance(self):
         goal_x, goal_y = self.waypoints[0]
         self.distance = math.sqrt((goal_x - self.base_x)**2 + (goal_y - self.base_y)**2)
