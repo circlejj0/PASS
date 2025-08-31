@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Pixhawk hopping code
 
 import time
 import math
 from dronekit import connect, VehicleMode, mavutil
 from pyproj import Transformer
-
-# ROS 2 라이브러리 추가
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Path
-from geometry_msgs.msg import PoseStamped, Point
+from geometry_msgs.msg import PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import ColorRGBA
 import transforms3d.euler as euler
 
-# --- DroneKit 연결 설정 ---
-# 시뮬레이션에 직접 연결할 때
-# connection_string = 'tcp:127.0.0.1:5760'
-# 실제 Pixhawk에 USB로 연결할 때
+# Pixhawk port number
 connection_string = '/dev/ttyACM0'
 print(f"Connecting to vehicle on: {connection_string}")
 vehicle = connect(connection_string, wait_ready=True, timeout=60)
 
-# --- ROS 2 노드 및 Publisher 클래스 ---
 class RvizVisualizer(Node):
     def __init__(self):
         super().__init__('dronekit_rviz_visualizer')
@@ -68,14 +62,13 @@ class RvizVisualizer(Node):
             marker.color.a = 1.0
 
             if i == next_obj_index:
-                marker.color.r, marker.color.g, marker.color.b = 0.0, 1.0, 0.0  # 현재 목표: 초록색
+                marker.color.r, marker.color.g, marker.color.b = 0.0, 1.0, 0.0
             else:
-                marker.color.r, marker.color.g, marker.color.b = 1.0, 0.0, 0.0  # 나머지: 빨간색
+                marker.color.r, marker.color.g, marker.color.b = 1.0, 0.0, 0.0
             marker_array.markers.append(marker)
         
         self.marker_pub.publish(marker_array)
 
-# --- DroneKit 제어 함수 ---
 def arm_and_guided(vehicle):
     print("Waiting for vehicle to become armable...")
     while not vehicle.is_armable:
@@ -99,7 +92,6 @@ def send_velocity_command(vehicle, velocity_x, yaw_rate_deg):
         0, yaw_rate_deg * (math.pi/180.0))
     vehicle.send_mavlink(msg)
 
-# --- 메인 로직 ---
 def main(args=None):
     rclpy.init(args=args)
     visualizer = RvizVisualizer()
@@ -116,7 +108,6 @@ def main(args=None):
             (129.105754, 35.134853)
         ]
         
-        # 기준점을 첫 웨이포인트로 설정하여 로컬 좌표계 생성
         origin_utm = transformer.transform(waypoints_lonlat[0][0], waypoints_lonlat[0][1])
         waypoints_local = [(x - origin_utm[0], y - origin_utm[1]) for x, y in [transformer.transform(lon, lat) for lon, lat in waypoints_lonlat]]
 
@@ -125,7 +116,6 @@ def main(args=None):
         target_speed = 0.1 # 1.5
         kp, kd, prev_heading_error = 30.0, 10.0, 0.0
 
-        # 메인 루프
         while next_obj < len(waypoints_local) and rclpy.ok():
             visualizer.publish_waypoints(waypoints_local, next_obj)
             
@@ -146,7 +136,7 @@ def main(args=None):
 
             if distance_to_goal < arrival_radius:
                 print(f"--- Waypoint {next_obj} Reached! ---")
-                next_obj += 1
+                next_obj += 1 
                 if next_obj >= len(waypoints_local):
                     break
                 send_velocity_command(vehicle, 0, 0)
