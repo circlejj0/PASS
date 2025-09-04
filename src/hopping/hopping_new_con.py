@@ -4,29 +4,23 @@
 
 import rclpy
 import math
-import time
+# import time
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from pyproj import Transformer
-
-# ROS 2 메시지 타입
 from nav_msgs.msg import Path
-from geometry_msgs.msg import PoseStamped, Point, Twist
+from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import NavSatFix, Imu
 from visualization_msgs.msg import Marker, MarkerArray
 # from std_msgs.msg import ColorRGBA
-
-# MAVROS 메시지 및 서비스 타입
 from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
-
 import transforms3d.euler as euler
 
-class DronekitToMavrosNode(Node):
+class mavroshopping(Node):
     def __init__(self):
         super().__init__('mavros_waypoint_follower')
 
-        # --- 상태 변수 ---
         self.current_state = None
         self.current_pose_gps = None
         self.current_yaw_rad = None
@@ -38,7 +32,6 @@ class DronekitToMavrosNode(Node):
         self.next_obj = 0
         self.prev_heading_error = 0.0
 
-        # --- 파라미터 ---
         self.declare_parameter('arrival_radius', 10.0)
         self.declare_parameter('target_speed', 0.1)
         self.declare_parameter('kp', 30.0)
@@ -50,47 +43,38 @@ class DronekitToMavrosNode(Node):
         self.kd = self.get_parameter('kd').value
 
         waypoints_lonlat = [
-            (129.104375, 35.133902), (129.104595, 35.133731),
-            (129.106874, 35.133931), (129.106810, 35.134896),
-            (129.105754, 35.134853)
+            (129.107100, 35.133504)
         ]
         self.origin_utm = self.transformer.transform(waypoints_lonlat[0][0], waypoints_lonlat[0][1])
         self.waypoints_local = [(x - self.origin_utm[0], y - self.origin_utm[1]) for x, y in [self.transformer.transform(lon, lat) for lon, lat in waypoints_lonlat]]
 
-        # --- ROS 2 인터페이스 ---
-        # QoS 설정 수정: MAVROS와의 통신을 위해 RELIABILITY를 BEST_EFFORT로 설정
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
         
-        # 구독자 (Subscribers)
+        # Sub
         self.state_sub = self.create_subscription(State, '/mavros/state', self.state_callback, qos_profile)
         self.gps_sub = self.create_subscription(NavSatFix, '/mavros/global_position/global', self.gps_callback, qos_profile)
         self.imu_sub = self.create_subscription(Imu, '/mavros/imu/data', self.imu_callback, qos_profile)
 
-        # 발행자 (Publishers)
+        # Pub
         self.velocity_pub = self.create_publisher(Twist, '/mavros/setpoint_velocity/cmd_vel_unstamped', 10)
         self.path_pub = self.create_publisher(Path, '/boat_path', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/boat_waypoints', 10)
         
-        # 서비스 클라이언트 (Service Clients)
         self.arming_client = self.create_client(CommandBool, '/mavros/cmd/arming')
         self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
 
-        # 시각화를 위한 Path 메시지 초기화
         self.path_msg = Path()
         self.path_msg.header.frame_id = "map"
 
-        # --- 상태 머신 및 메인 루프 ---
         self.status = "INITIALIZING"
         self.get_logger().info('Node initialized. Waiting for MAVROS connection and GPS...')
-        # `time.sleep` 대신 사용될 타이머.
         self.pause_timer = None
         self.control_timer = self.create_timer(0.1, self.control_loop)
 
-    # --- 콜백 함수들 ---
     def state_callback(self, msg):
         self.current_state = msg
 
@@ -101,29 +85,24 @@ class DronekitToMavrosNode(Node):
         q = msg.orientation
         _, _, self.current_yaw_rad = euler.quat2euler([q.w, q.x, q.y, q.z])
 
-    # --- 제어 및 상태 관리 함수 ---
     def arm_and_set_mode(self):
-        # Arming 요청
         arm_req = CommandBool.Request()
         arm_req.value = True
         self.arming_client.call_async(arm_req)
         self.get_logger().info("Arming command sent...")
 
-        # GUIDED 모드 변경 요청
         mode_req = SetMode.Request()
         mode_req.custom_mode = 'GUIDED'
         self.set_mode_client.call_async(mode_req)
         self.get_logger().info("Set mode to GUIDED command sent...")
 
     def control_loop(self):
-        # 웨이포인트 도착 후 일시 정지 상태인 경우, 제어 로직을 실행하지 않음
         if self.status == "PAUSED":
             return
 
-        # 상태 머신
         if self.status == "INITIALIZING":
             if self.current_state is None or self.current_pose_gps is None or self.current_yaw_rad is None:
-                return # 아직 모든 정보가 들어오지 않음
+                return
             
             if not self.current_state.connected:
                 self.get_logger().warn("MAVROS not connected to FCU. Retrying...")
@@ -138,13 +117,11 @@ class DronekitToMavrosNode(Node):
                 self.get_logger().info("Vehicle armed and in GUIDED mode. Starting mission.")
                 self.status = "MISSION"
             else:
-                # 계속 Arming 및 모드 변경 시도
                 self.arm_and_set_mode()
                 self.get_logger().info(f"Waiting for arm/guided mode. Current mode: {self.current_state.mode}, Armed: {self.current_state.armed}")
-            return # 미션 시작 전까지는 아래 로직 실행 안 함
+            return
 
         elif self.status == "MISSION":
-            # 모든 정보가 있는지 최종 확인
             if self.current_pose_gps is None or self.current_yaw_rad is None:
                 return
 
@@ -164,7 +141,6 @@ class DronekitToMavrosNode(Node):
                 if self.next_obj >= len(self.waypoints_local):
                     self.status = "DONE"
                     return
-                # 다음 웨이포인트 가기 전 잠시 정지
                 self.publish_velocity(0.0, 0.0)
                 self.status = "PAUSED"
                 self.pause_timer = self.create_timer(7.0, self.resume_mission) # 7초 후 미션 재개
@@ -172,7 +148,6 @@ class DronekitToMavrosNode(Node):
             
             desired_heading_rad = math.atan2(goal_local[0] - current_local[0], goal_local[1] - current_local[1])
             heading_error = desired_heading_rad - self.current_yaw_rad
-            # 각도 오차를 -pi ~ pi 범위로 정규화
             while heading_error > math.pi: heading_error -= 2 * math.pi
             while heading_error < -math.pi: heading_error += 2 * math.pi
             
@@ -186,7 +161,6 @@ class DronekitToMavrosNode(Node):
         elif self.status == "DONE":
             self.get_logger().info("Mission complete. Stopping vehicle.")
             self.publish_velocity(0.0, 0.0)
-            # 노드를 종료하거나 대기 상태로 전환할 수 있음
 
     def resume_mission(self):
         """일시 정지 타이머 콜백"""
@@ -195,11 +169,10 @@ class DronekitToMavrosNode(Node):
         self.pause_timer = None
         self.status = "MISSION"
 
-    # --- 발행 함수들 ---
     def publish_velocity(self, velocity_x, yaw_rate_rad_s):
         vel_msg = Twist()
         vel_msg.linear.x = velocity_x
-        vel_msg.angular.z = yaw_rate_rad_s # MAVROS는 rad/s 단위를 사용
+        vel_msg.angular.z = yaw_rate_rad_s
         self.velocity_pub.publish(vel_msg)
 
     def publish_path(self, utm_x, utm_y, yaw_rad):
@@ -236,14 +209,13 @@ class DronekitToMavrosNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = DronekitToMavrosNode()
+    node = mavroshopping()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         print("\nNode interrupted by user.")
     finally:
         node.get_logger().info("Shutting down. Sending stop command.")
-        # 노드가 종료되기 전 마지막으로 정지 명령을 보냄
         node.publish_velocity(0.0, 0.0)
         node.destroy_node()
         rclpy.shutdown()
