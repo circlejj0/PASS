@@ -18,7 +18,7 @@ class DockingGuid(Node):
 
         self.declare_parameter('camera_topic', '/wamv/sensors/cameras/front_left_camera_sensor/optical/image_raw')
         self.declare_parameter('show', True)
-        self.declare_parameter('target_class', 'rectangle')  # YOLO에서 학습된 이름
+        self.declare_parameter('target_class', 'circle')  # YOLO에서 학습된 이름
         gp = self.get_parameter
         self.camera_topic = gp('camera_topic').value
         self.show = bool(gp('show').value)
