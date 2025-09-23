@@ -52,7 +52,7 @@ class DockingCont(Node):
         
         # 도크 방향 (회전하기 위함)
         transformer = Transformer.from_crs("EPSG:4326", "EPSG:32756")
-        dock_lonlat = (150.67441330657957, -33.72255187124071)
+        dock_lonlat = (150.67447312373196, -33.72246602165311)
         self.dock_utm_x, self.dock_utm_y = transformer.transform(dock_lonlat[1], dock_lonlat[0])
     
     # Callback Functions
