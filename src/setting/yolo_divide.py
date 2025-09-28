@@ -3,30 +3,35 @@ import random
 import shutil
 
 # 원본 데이터셋
-src_dir = "/home/circle_jj/ros2_ws/src/yolo/train/images"
+images_dir = "/home/circle_jj/ros2_ws/src/yolo/train/images"
+labels_dir = "/home/circle_jj/ros2_ws/src/yolo/train/labels"
 
-# 새로운 폴더
-train_dir = "/home/circle_jj/ros2_ws/src/yolo/train_split/images"
-val_dir   = "/home/circle_jj/ros2_ws/src/yolo/valid_split/images"
+# 새로 만들 폴더
+train_images = "/home/circle_jj/ros2_ws/src/yolo/train_split/images"
+train_labels = "/home/circle_jj/ros2_ws/src/yolo/train_split/labels"
+val_images   = "/home/circle_jj/ros2_ws/src/yolo/valid_split/images"
+val_labels   = "/home/circle_jj/ros2_ws/src/yolo/valid_split/labels"
 
-os.makedirs(train_dir, exist_ok=True)
-os.makedirs(val_dir, exist_ok=True)
+for d in [train_images, train_labels, val_images, val_labels]:
+    os.makedirs(d, exist_ok=True)
 
 # 이미지 파일 리스트
-files = [f for f in os.listdir(src_dir) if f.endswith((".jpg", ".png"))]
+files = [f for f in os.listdir(images_dir) if f.endswith((".jpg", ".png"))]
 random.shuffle(files)
 
-# 비율 설정 (예: 80% train, 20% val)
 split_ratio = 0.8
 split_idx = int(len(files) * split_ratio)
 
 train_files = files[:split_idx]
-val_files = files[split_idx:]
+val_files   = files[split_idx:]
 
-# 파일 이동
+# 이미지와 라벨 같이 복사
 for f in train_files:
-    shutil.copy(os.path.join(src_dir, f), os.path.join(train_dir, f))
+    shutil.copy(os.path.join(images_dir, f), os.path.join(train_images, f))
+    shutil.copy(os.path.join(labels_dir, f.replace(".jpg", ".txt")), os.path.join(train_labels, f.replace(".jpg", ".txt")))
+
 for f in val_files:
-    shutil.copy(os.path.join(src_dir, f), os.path.join(val_dir, f))
+    shutil.copy(os.path.join(images_dir, f), os.path.join(val_images, f))
+    shutil.copy(os.path.join(labels_dir, f.replace(".jpg", ".txt")), os.path.join(val_labels, f.replace(".jpg", ".txt")))
 
 print(f"Train: {len(train_files)} images, Val: {len(val_files)} images")
