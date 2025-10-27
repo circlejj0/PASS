@@ -39,7 +39,7 @@ class DockingNavi(Node):
         self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32756")
 
         # 목표 좌표 (도착 시작 지점 좌표임. 여기서 도크쪽으로 회전)
-        waypoint_lonlat = [(150.674357383792, -33.7226209717351)]
+        waypoint_lonlat = [(150.67438644379544, -33.7225618451381)]
         self.waypoints = [self.transformer.transform(lat, lon) for lon, lat in waypoint_lonlat]
 
         # 제어 파라미터
