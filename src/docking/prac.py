@@ -81,20 +81,20 @@ class MavrosDockingController(Node):
         # --- Guid(비전) 파라미터 ---
         self.declare_parameter('camera_topic', '/flir_camera/image_raw')
         self.declare_parameter('show_vision', True)
-        self.declare_parameter('targets', ['circle', 'triangle', 'rectangle'])
-        self.declare_parameter('yolo_model_pkg', 'pass_docking') # [!] 패키지 이름
+        self.declare_parameter('targets', ['green_circle', 'red_triangle', 'black_rectangle'])
+        self.declare_parameter('yolo_model_pkg', 'docking_final') # [!] 패키지 이름
         self.declare_parameter('yolo_model_path', 'weights/docking.pt')
 
         # --- Navi(항법) 파라미터 ---
-        self.declare_parameter('target_shape', 'circle') # [!] 최종 목표 도형
-        self.declare_parameter('point_1_inspection_lonlat', [150.674332, -33.722644])
-        self.declare_parameter('point_2_inspection_facing_lonlat', [150.674399, -33.722560])
-        self.declare_parameter('dock_0_nav_lonlat', [150.674353, -33.722521])
-        self.declare_parameter('dock_0_face_lonlat', [150.674425, -33.722430])
-        self.declare_parameter('dock_1_nav_lonlat', [150.674428, -33.722527])
-        self.declare_parameter('dock_1_face_lonlat', [150.674480, -33.722458])
-        self.declare_parameter('dock_2_nav_lonlat', [150.674476, -33.722563])
-        self.declare_parameter('dock_2_face_lonlat', [150.674535, -33.722488])
+        self.declare_parameter('target_shape', 'green_circle') # [!] 최종 목표 도형
+        self.declare_parameter('point_1_inspection_lonlat', [129.107267, 35.132566])
+        self.declare_parameter('point_2_inspection_facing_lonlat', [129.107388, 35.132576])
+        self.declare_parameter('dock_0_nav_lonlat', [129.107582, 35.132693])
+        self.declare_parameter('dock_0_face_lonlat', [129.107667, 35.132726])
+        self.declare_parameter('dock_1_nav_lonlat', [129.107502, 35.132588])
+        self.declare_parameter('dock_1_face_lonlat', [129.107604, 35.132604])
+        self.declare_parameter('dock_2_nav_lonlat', [129.107685, 35.132477])
+        self.declare_parameter('dock_2_face_lonlat', [129.107789, 35.132511])
         
         # --- Cont(제어) 파라미터 ---
         self.declare_parameter('arrival_radius', 0.5) # m, 경유점 도착 반경
