@@ -81,12 +81,12 @@ class MavrosDockingController(Node):
         # --- Guid(비전) 파라미터 ---
         self.declare_parameter('camera_topic', '/flir_camera/image_raw')
         self.declare_parameter('show_vision', True)
-        self.declare_parameter('targets', ['green_circle', 'red_triangle', 'black_rectangle'])
+        self.declare_parameter('targets', ['circle', 'square', 'triangle'])
         self.declare_parameter('yolo_model_pkg', 'docking_final') # [!] 패키지 이름
         self.declare_parameter('yolo_model_path', 'weights/docking.pt')
 
         # --- Navi(항법) 파라미터 ---
-        self.declare_parameter('target_shape', 'green_circle') # [!] 최종 목표 도형
+        self.declare_parameter('target_shape', 'circle') # [!] 최종 목표 도형
         self.declare_parameter('point_1_inspection_lonlat', [129.107267, 35.132566])
         self.declare_parameter('point_2_inspection_facing_lonlat', [129.107388, 35.132576])
         self.declare_parameter('dock_0_nav_lonlat', [129.107582, 35.132693])
